@@ -1,18 +1,15 @@
 import json
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from sse_starlette.sse import EventSourceResponse
-from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from db.session import get_db
+from db.models import Complaint, RiskAssessment
 from agents.graph import graph
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
-class ChatRequest(BaseModel):
-    message: str
-    complaint_id: int = None
-
-
-async def event_generator(message: str, complaint_id: int = None):
+async def event_generator(message: str, complaint_id: int = None, db: Session = None):
     initial_state = {
         "intent": "",
         "raw_input": message,
@@ -30,25 +27,47 @@ async def event_generator(message: str, complaint_id: int = None):
         "summary": None,
     }
 
-    # Step 1: show progress
+    if complaint_id and db:
+        complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
+        assessment = db.query(RiskAssessment).filter(
+            RiskAssessment.complaint_id == complaint_id
+        ).first()
+        if complaint:
+            initial_state["form"] = {c.name: getattr(complaint, c.name) for c in Complaint.__table__.columns}
+            initial_state["previous_form"] = dict(initial_state["form"])
+        if assessment:
+            initial_state["assessment"] = {c.name: getattr(assessment, c.name) for c in RiskAssessment.__table__.columns}
+            initial_state["previous_assessment"] = dict(initial_state["assessment"])
+
     yield {"event": "progress", "data": json.dumps({"percent": 10, "status": "Classifying intent..."})}
 
+    is_new = not complaint_id
     result = graph.invoke(initial_state)
+    new_id = result.get("complaint_id") or complaint_id
+
+    if is_new and result.get("form"):
+        col_names = Complaint.__table__.columns.keys()
+        form_data = {k: v for k, v in result["form"].items() if k in col_names}
+        complaint = Complaint(**form_data)
+        db.add(complaint)
+        db.flush()
+        assessment_data = result.get("assessment", {})
+        assessment = RiskAssessment(complaint_id=complaint.id, **assessment_data)
+        db.add(assessment)
+        db.commit()
+        new_id = complaint.id
 
     yield {"event": "progress", "data": json.dumps({"percent": 50, "status": "Extracting details...", "form": result.get("form", {})})}
-
     yield {"event": "progress", "data": json.dumps({"percent": 80, "status": "Running risk assessment...", "assessment": result.get("assessment", {})})}
-
     yield {"event": "progress", "data": json.dumps({"percent": 100, "status": "Complete"})}
-
     yield {"event": "result", "data": json.dumps({
         "form": result.get("form", {}),
         "assessment": result.get("assessment", {}),
         "reply": result.get("reply", ""),
-        "complaint_id": result.get("complaint_id"),
+        "complaint_id": new_id,
     })}
 
 
 @router.get("/stream")
-async def chat_stream(message: str, complaint_id: int = None):
-    return EventSourceResponse(event_generator(message, complaint_id))
+async def chat_stream(message: str, complaint_id: int = None, db: Session = Depends(get_db)):
+    return EventSourceResponse(event_generator(message, complaint_id, db))

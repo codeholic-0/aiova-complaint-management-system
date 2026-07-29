@@ -16,8 +16,16 @@ def merge_changes(state: ComplaintState) -> dict:
     response = llm.invoke(messages)
     result = json.loads(response.content)
 
+    updated_form = result.get("form")
+    if not updated_form:
+        updated_form = state.get("form", {})
+
+    updated_assessment = result.get("assessment")
+    if not updated_assessment:
+        updated_assessment = state.get("assessment", {})
+
     return {
-        "form": result.get("form", state.get("form", {})),
-        "assessment": result.get("assessment", state.get("assessment", {})),
+        "form": updated_form,
+        "assessment": updated_assessment,
         "reply": result.get("reply", "Updated successfully."),
     }

@@ -38,11 +38,17 @@ export default function ChatInput() {
       dispatch(setProgress({ percent: 100, status: "Complete" }));
     });
 
-    eventSource.onerror = () => {
+    eventSource.addEventListener("error", (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        dispatch(addMessage({ role: "bot", content: `Error: ${data.error}` }));
+      } catch {
+        // parse error means connection error, not app error
+      }
       eventSource.close();
       dispatch(setStreaming(false));
       dispatch(setProgress({ percent: 0, status: "" }));
-    };
+    });
   };
 
   const handleKeyDown = (e) => {

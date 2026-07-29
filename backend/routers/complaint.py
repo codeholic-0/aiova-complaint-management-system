@@ -1,9 +1,10 @@
 import json
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, UploadFile, File
 from sqlalchemy.orm import Session
 from db.session import get_db
 from db.models import Complaint, RiskAssessment
 from agents.graph import graph
+from tools.pdf_parser import extract_text_from_pdf, extract_text_from_email
 
 router = APIRouter(prefix="/api/complaint", tags=["complaint"])
 
@@ -107,6 +108,37 @@ def extract_from_file(body: dict, db: Session = Depends(get_db)):
     result = run_graph(text, complaint_id=body.get("complaint_id"))
 
     return {
+        "form": result.get("form", {}),
+        "assessment": result.get("assessment", {}),
+        "reply": result.get("reply", ""),
+    }
+
+
+@router.post("/upload")
+async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    contents = await file.read()
+    filename = file.filename.lower()
+
+    if filename.endswith(".pdf"):
+        text = extract_text_from_pdf(contents)
+    elif filename.endswith(".eml"):
+        text = extract_text_from_email(contents)
+    else:
+        text = contents.decode("utf-8", errors="ignore")
+
+    result = run_graph(text)
+
+    complaint = Complaint(**result.get("form", {}))
+    db.add(complaint)
+    db.flush()
+
+    assessment_data = result.get("assessment", {})
+    assessment = RiskAssessment(complaint_id=complaint.id, **assessment_data)
+    db.add(assessment)
+    db.commit()
+
+    return {
+        "complaint_id": complaint.id,
         "form": result.get("form", {}),
         "assessment": result.get("assessment", {}),
         "reply": result.get("reply", ""),
