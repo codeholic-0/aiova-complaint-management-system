@@ -6,6 +6,7 @@ const initialState = {
     fileType: "",
     extractedText: "",
     isUploading: false,
+    uploadedFiles: [],
 };
 
 const uploadSlice = createSlice({
@@ -23,15 +24,29 @@ const uploadSlice = createSlice({
         setUploading(state, action) {
             state.isUploading = action.payload;
         },
+        addUploadedFile(state, action) {
+            const entry = { name: action.payload.name, timestamp: Date.now() };
+            state.uploadedFiles = [entry, ...state.uploadedFiles.filter(f => f.name !== entry.name)];
+        },
+        removeUploadedFile(state, action) {
+            state.uploadedFiles = state.uploadedFiles.filter(f => f.name !== action.payload);
+        },
         clearFile(state) {
             state.file = null;
             state.fileName = "";
             state.fileType = "";
             state.extractedText = "";
         },
+        clearAllFiles(state) {
+            state.file = null;
+            state.fileName = "";
+            state.fileType = "";
+            state.extractedText = "";
+            state.uploadedFiles = [];
+        },
     },
 });
 
-export const { setFile, setExtractedText, setUploading, clearFile } =
+export const { setFile, setExtractedText, setUploading, addUploadedFile, removeUploadedFile, clearFile, clearAllFiles } =
     uploadSlice.actions;
 export default uploadSlice.reducer;
