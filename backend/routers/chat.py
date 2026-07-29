@@ -13,6 +13,7 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 async def event_generator(message: str, complaint_id: int = None, db: Session = None):
     initial_state = {
         "intent": "",
+        "command": "",
         "raw_input": message,
         "extracted_text": "",
         "form": {},
@@ -54,6 +55,18 @@ async def event_generator(message: str, complaint_id: int = None, db: Session = 
     result = graph.invoke(initial_state)
     new_id = result.get("complaint_id") or complaint_id
 
+    intent = result.get("intent", "")
+
+    # For /commands, just stream reply — no DB writes
+    if intent == "command":
+        yield {"event": "result", "data": json.dumps({
+            "form": result.get("form", {}),
+            "assessment": result.get("assessment", {}),
+            "reply": result.get("reply", ""),
+            "complaint_id": new_id,
+        })}
+        return
+
     if is_new and result.get("form"):
         col_names = Complaint.__table__.columns.keys()
         form_data = {k: v for k, v in result["form"].items() if k in col_names}
@@ -61,8 +74,9 @@ async def event_generator(message: str, complaint_id: int = None, db: Session = 
         db.add(complaint)
         db.flush()
         assessment_data = result.get("assessment", {})
-        assessment = RiskAssessment(complaint_id=complaint.id, **assessment_data)
-        db.add(assessment)
+        if assessment_data:
+            assessment = RiskAssessment(complaint_id=complaint.id, **assessment_data)
+            db.add(assessment)
         db.commit()
         new_id = complaint.id
 

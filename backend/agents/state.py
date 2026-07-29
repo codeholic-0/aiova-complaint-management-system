@@ -27,14 +27,15 @@ class AssessmentState(TypedDict, total=False):
 
 class ComplaintState(TypedDict):
     intent: str
-    raw_input: str                       
+    command: str
+    raw_input: str
     extracted_text: str
     form: FormState
-    assessment: AssessmentState          
+    assessment: AssessmentState
     previous_form: Optional[FormState]
     previous_assessment: Optional[AssessmentState]
     complaint_id: Optional[int]
-    reply: str 
+    reply: str
     missing_fields: List[str]
     duplicate_info: Optional[str]
     root_cause: Optional[str]

@@ -12,6 +12,7 @@ router = APIRouter(prefix="/api/complaint", tags=["complaint"])
 def run_graph(raw_input: str, complaint_id: int = None) -> dict:
     initial_state = {
         "intent": "",
+        "command": "",
         "raw_input": raw_input,
         "extracted_text": "",
         "form": {},
@@ -70,6 +71,7 @@ def edit_complaint(body: dict, db: Session = Depends(get_db)):
 
     initial_state = {
         "intent": "edit",
+        "command": "",
         "raw_input": prompt,
         "extracted_text": "",
         "form": current_form,
