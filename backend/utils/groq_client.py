@@ -5,8 +5,8 @@ from langchain_groq import ChatGroq
 load_dotenv()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-MODEL_NAME = "gemma2-9b-it"
-FALLBACK_MODEL = "llama-3.3-70b-versatile"
+MODEL_NAME = "llama-3.1-8b-instant"
+FALLBACK_MODEL = "qwen/qwen3.6-27b"
 
 
 def get_groq_llm(model: str = MODEL_NAME, temperature: float = 0.1):
