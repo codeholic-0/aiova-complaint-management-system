@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, date
 from fastapi import APIRouter, Depends
 from sse_starlette.sse import EventSourceResponse
 from sqlalchemy.orm import Session
@@ -33,10 +34,18 @@ async def event_generator(message: str, complaint_id: int = None, db: Session = 
             RiskAssessment.complaint_id == complaint_id
         ).first()
         if complaint:
-            initial_state["form"] = {c.name: getattr(complaint, c.name) for c in Complaint.__table__.columns}
+            def safe(val):
+                if isinstance(val, (datetime, date)):
+                    return val.isoformat()
+                return val
+            initial_state["form"] = {c.name: safe(getattr(complaint, c.name)) for c in Complaint.__table__.columns}
             initial_state["previous_form"] = dict(initial_state["form"])
         if assessment:
-            initial_state["assessment"] = {c.name: getattr(assessment, c.name) for c in RiskAssessment.__table__.columns}
+            def safe(val):
+                if isinstance(val, (datetime, date)):
+                    return val.isoformat()
+                return val
+            initial_state["assessment"] = {c.name: safe(getattr(assessment, c.name)) for c in RiskAssessment.__table__.columns}
             initial_state["previous_assessment"] = dict(initial_state["assessment"])
 
     yield {"event": "progress", "data": json.dumps({"percent": 10, "status": "Classifying intent..."})}
