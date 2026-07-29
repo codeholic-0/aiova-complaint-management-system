@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { addMessage, setStreaming, setProgress } from "../../store/slices/chatSlice";
 import { setFromBackend } from "../../store/slices/complaintSlice";
@@ -6,13 +6,39 @@ import { setComplaintId } from "../../store/slices/sessionSlice";
 import { addUploadedFile, removeUploadedFile, setUploading } from "../../store/slices/uploadSlice";
 import { createChatStream, uploadFile } from "../../services/api";
 
+const COMMANDS = [
+  { cmd: "/capa", desc: "Recommend corrective and preventive actions" },
+  { cmd: "/completeness", desc: "Check which fields are still missing" },
+  { cmd: "/diff", desc: "Show changes from last edit" },
+  { cmd: "/duplicate", desc: "Check for potential duplicate complaints" },
+  { cmd: "/riskclassify", desc: "ICH Q9 risk classification" },
+  { cmd: "/rootcause", desc: "Perform root cause analysis" },
+  { cmd: "/summary", desc: "Generate a complaint summary" },
+  { cmd: "/undo", desc: "Undo last edit" },
+];
+
 export default function ChatInput() {
   const [input, setInput] = useState("");
+  const [showCommands, setShowCommands] = useState(false);
+  const [selIdx, setSelIdx] = useState(0);
   const dispatch = useDispatch();
   const fileRef = useRef(null);
+  const inputRef = useRef(null);
   const { complaintId } = useSelector((s) => s.session);
   const { isStreaming } = useSelector((s) => s.chat);
   const { uploadedFiles, isUploading } = useSelector((s) => s.upload);
+
+  const filter = input.startsWith("/") ? input.slice(1).toLowerCase() : "";
+  const filtered = filter
+    ? COMMANDS.filter((c) => c.cmd.includes(filter))
+    : COMMANDS;
+
+  const selectCommand = useCallback((cmd) => {
+    setInput(cmd + " ");
+    setShowCommands(false);
+    setSelIdx(0);
+    inputRef.current?.focus();
+  }, []);
 
   const handleSubmit = () => {
     const text = input.trim();
@@ -89,15 +115,48 @@ export default function ChatInput() {
     }
   };
 
+  const handleChange = (e) => {
+    const val = e.target.value;
+    setInput(val);
+    setSelIdx(0);
+    setShowCommands(val.startsWith("/"));
+  };
+
   const handleKeyDown = (e) => {
+    if (showCommands && filtered.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelIdx((i) => (i + 1 < filtered.length ? i + 1 : 0));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelIdx((i) => (i > 0 ? i - 1 : filtered.length - 1));
+        return;
+      }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        selectCommand(filtered[selIdx].cmd);
+        return;
+      }
+      if (e.key === "Escape") {
+        setShowCommands(false);
+        setSelIdx(0);
+        return;
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
     }
   };
 
+  useEffect(() => {
+    if (showCommands) setSelIdx(0);
+  }, [input, showCommands]);
+
   return (
-    <div className="mt-4 border-t pt-4">
+    <div className="mt-4 border-t pt-4 relative">
       {uploadedFiles.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">
           {uploadedFiles.map((f) => (
@@ -116,6 +175,24 @@ export default function ChatInput() {
           ))}
         </div>
       )}
+
+      {showCommands && filtered.length > 0 && (
+        <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden z-10">
+          {filtered.map((c, i) => (
+            <button
+              key={c.cmd}
+              className={`w-full text-left px-3 py-2 text-sm flex items-center gap-3 ${
+                i === selIdx ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
+              }`}
+              onMouseDown={() => selectCommand(c.cmd)}
+            >
+              <span className="font-mono font-medium">{c.cmd}</span>
+              <span className="text-gray-400 text-xs">{c.desc}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex items-center gap-2">
         <input
           ref={fileRef}
@@ -136,10 +213,11 @@ export default function ChatInput() {
           </svg>
         </button>
         <input
+          ref={inputRef}
           className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-          placeholder="Type your message..."
+          placeholder="Type your message... (type / for commands)"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={handleChange}
           onKeyDown={handleKeyDown}
           disabled={isStreaming}
         />
