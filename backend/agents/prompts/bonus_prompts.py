@@ -1,5 +1,6 @@
-COMPLETENESS_PROMPT = """Check the complaint form for missing required fields.
+COMPLETENESS_PROMPT = """Check ONLY these required fields and report which are empty/null/missing:
 Required fields: product_name, batch_lot, complaint_type, description, severity.
+Ignore all other optional fields (strength, unit, dates, etc.).
 Return JSON: {"missing_fields": ["field1", "field2"], "complete": false/true}"""
 
 DUPLICATE_PROMPT = """Compare this complaint against the following existing complaints.

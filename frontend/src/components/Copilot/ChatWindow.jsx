@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useSelector } from "react-redux";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export default function ChatWindow() {
   const { messages } = useSelector((s) => s.chat);
@@ -23,7 +25,19 @@ export default function ChatWindow() {
                 : "bg-white border border-gray-200 text-gray-800"
             }`}
           >
-            {msg.content}
+            {msg.role === "user" ? (
+              msg.content
+            ) : (
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  strong: ({ children }) => <span className="font-semibold">{children}</span>,
+                  p: ({ children }) => <span>{children}</span>,
+                }}
+              >
+                {msg.content}
+              </ReactMarkdown>
+            )}
           </div>
         </div>
       ))}
